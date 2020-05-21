@@ -7,6 +7,16 @@
 #include "Elevator.h"
 
 using namespace std;
+//=====================================================================================================================
+
+void  deallocate_passenger_from_elevator(Passenger &p, Elevator &e)
+{
+    p.board_start_time=-1;    //Reinitialize the board start time
+    p.allotted_elevator=-1;    //Allocate the person a new elevator
+    e.reduce_pcount();  //The elevator is not picking that person anymore
+}
+
+//=====================================================================================================================
 
 int main() {
     //Note time is in integral seconds
@@ -19,6 +29,12 @@ int main() {
     vector<int> active_elevators;   //Elevators which are moving
     vector<Passenger> dropping_passengers;
     vector<Passenger> dropped_passengers;
+
+    if(NUM_PASSENGERS!=PASSENGERS.size())
+    {
+        cout<<"Input is wrong. Number of passengers, don't match size of passenger input"<<endl;
+        return 0;
+    }
 
     vector<int> idle_elevators;
     for(int i=0;i<NUM_ELEVATORS;i++)   //Elevator count is 0 indexed...
@@ -54,6 +70,7 @@ int main() {
         for(int i=0;i<active_elevators.size();i++)
         {
             auto ind = active_elevators[i];
+            cout<<"Active elevators size: "<<active_elevators.size()<<endl;
             if(elevators[ind].elevator_status==NONE)    //If boarding/dropping_off, then lift doesn't move
             {
                 elevators[ind].time_since_start++;          //If not boarding the timer increases
@@ -116,16 +133,18 @@ int main() {
             {
                 for(const auto &j:active_elevators)     //First let's see if any active elevator can be utilised
                 {
-                    if(elevators[j].direction==passenger.direction && elevators[j].num_people()<MAX_CAPACITY)
+                    if(elevators[j].assigned_pdirn == passenger.direction && elevators[j].num_people()<MAX_CAPACITY)
                     {
-                        if(passenger.direction==UP && elevators[j].floor<=passenger.start_floor)
+                        if(elevators[j].direction==UP && elevators[j].floor<=passenger.start_floor)
                         {
                             passenger.allotted_elevator=j;
+                            elevators[j].assigned_pcount++;
                             break;
                         }
-                        else if(passenger.direction==DOWN && elevators[j].floor>=passenger.start_floor)
+                        else if(elevators[j].direction==DOWN && elevators[j].floor>=passenger.start_floor)
                         {
                             passenger.allotted_elevator=j;
+                            elevators[j].assigned_pcount++;
                             break;
                         }
 
@@ -151,11 +170,12 @@ int main() {
             {
                 passenger.allotted_elevator=best_elevator;
                 elevators[best_elevator].direction = passenger.start_floor>elevators[best_elevator].floor ? UP : DOWN;
+                elevators[best_elevator].assigned_pcount++;
+                elevators[best_elevator].assigned_pdirn = passenger.direction;
                 active_elevators.push_back(best_elevator);
                 idle_elevators.erase(std::remove(idle_elevators.begin(), idle_elevators.end(), best_elevator), idle_elevators.end());
                 std::cout<<"Allocating elevator to passenger. Passenger details are as follows "<<std::endl;
                 passenger.compact_print();
-//                cout<<"Allocated Elevator: "<<best_elevator<<endl;
             }
         }
 
@@ -164,6 +184,13 @@ int main() {
         {
             if(active_total_passengers[i].board_start_time==-1)  //Passenger hasn't boarded the elevator yet
             {
+                if(elevators[active_total_passengers[i].allotted_elevator].num_people()==MAX_CAPACITY)
+                    //For the case when this passenger was allocated the elevator, but it got filled even before it reached this passenger
+                {
+                    deallocate_passenger_from_elevator(active_total_passengers[i],elevators[active_total_passengers[i].allotted_elevator]);
+                }
+
+
                 if(elevators[active_total_passengers[i].allotted_elevator].floor == active_total_passengers[i].start_floor) //Elevator has reached passenger floor
                 {
                     std::cout<<"Elevator has reached passenger"<<std::endl;
@@ -174,7 +201,13 @@ int main() {
             }
             else
             {
-                if(PRESENT_TIME - active_total_passengers[i].board_start_time == PDO_TIME)   //It's time for passenger to board;
+                if(elevators[active_total_passengers[i].allotted_elevator].num_people()==MAX_CAPACITY)
+                //For the case when two or more passengers want to enter at the same floor but the lift doesn't have that much capacity
+                {
+                    deallocate_passenger_from_elevator(active_total_passengers[i],elevators[active_total_passengers[i].allotted_elevator]);
+                }
+
+                else if(PRESENT_TIME - active_total_passengers[i].board_start_time == PDO_TIME)   //It's time for passenger to board;
                 {
                     auto boarding_passenger = active_total_passengers[i];
                     auto elevator_index = boarding_passenger.allotted_elevator;
@@ -182,20 +215,30 @@ int main() {
                     boarding_passenger.compact_print();
                     active_total_passengers.erase(active_total_passengers.begin()+i);
                     elevators[elevator_index].elevator_status = NONE;
-                    elevators[elevator_index].direction = boarding_passenger.direction;
-                    active_elevators.push_back(elevator_index);
-                    if(std::find(idle_elevators.begin(),idle_elevators.end(),elevator_index)!=idle_elevators.end())
-                    {
-                        std::cout<<"Removing from idle_elevator list"<<std::endl;
-                        idle_elevators.erase(std::remove(idle_elevators.begin(), idle_elevators.end(), elevator_index), idle_elevators.end());
-                    }
                     elevators[elevator_index].pq.push(std::move(boarding_passenger));
+                    elevators[elevator_index].reduce_pcount();
+                    if(elevators[elevator_index].assigned_pcount==0 || elevators[elevator_index].num_people()==MAX_CAPACITY)    //If there is no one else more to pick or if the elevator has reached it's max capacity. It should start dropping people
+                    {
+                        elevators[elevator_index].direction = boarding_passenger.direction;
+                        for(int k=0;k<active_total_passengers.size();k++)
+                        {
+                            if(active_total_passengers[k].allotted_elevator==elevator_index)
+                                deallocate_passenger_from_elevator(active_total_passengers[k],elevators[elevator_index]);
+                        }
+                    }
+
                 }
             }
         }
-
-//        num_passengers_reached++; //To remove
         PRESENT_TIME++;
+    }
+
+    cout<<"====================   RESULT   ========================================="<<endl;
+
+    for(int  i=0;i<dropped_passengers.size();i++)
+    {
+        cout<<"Passenger: "<<i<<endl;
+        cout<<"Passenger end time is: "<<dropped_passengers[i].end_time<<endl;
     }
 
 

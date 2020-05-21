@@ -22,6 +22,7 @@ void Elevator::update_floor()
 void Elevator::set_idle()
 {
     direction = IDLE;
+    assigned_pdirn = IDLE;
     elevator_status = NONE;
 }
 
@@ -37,10 +38,23 @@ void Elevator::post_drop_reset()
 
 //=====================================================================================================================
 
+void Elevator::reduce_pcount()
+{
+    assigned_pcount--;
+    if(assigned_pcount<0)
+    {
+        std::cout<<"assigned_pcount  has fallen below 0. It is an ERROR!!"<<std::endl;
+        exit (0);
+    }
+}
+
+//=====================================================================================================================
+
 void Elevator::compact_print()
 {
     std::cout<<"At floor: "<<floor<<"\t"<<"Moving in direction: "<<direction<<std::endl;
     std::cout<<"Num passengers: "<<num_people()<<"\t"<<"Elevator Status: "<<elevator_status<<std::endl;
+    std::cout<<"Assigned p_count: "<<assigned_pcount<<std::endl;
     std::cout<<"================================================================"<<std::endl;
 }
 
@@ -48,7 +62,6 @@ void Elevator::compact_print()
 
 std::ostream& operator << (std::ostream& os, const STATUS& obj)
 {
-//    os << static_cast<std::underlying_type<STATUS>::type>(obj);
     switch(obj){
         case BOARDING:
             os<<"BOARDING";
